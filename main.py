@@ -6,6 +6,8 @@ from selenium.webdriver.common.by import By # type: ignore
 from time import sleep
 from dotenv import load_dotenv # type: ignore
 import os
+from selenium.webdriver.chrome.service import Service # type: ignore
+from selenium.webdriver.chrome.options import Options # type: ignore
 
 load_dotenv()
 
@@ -19,13 +21,16 @@ class autobuy_bot(threading.Thread):
         self.autocheckout = autocheckout
 
     def run(self):
-        options = webdriver.ChromeOptions()
-        options.headless = True
-        driver = webdriver.Chrome(options=options)
+        options = Options()
+        options.add_argument("--headless=False")  # important for Railway or other Container. Comment this line to enable Visible Chrome in local.
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        
+        driver = webdriver.Chrome(service=Service("/usr/local/bin/chromedriver"), options=options)
 
         driver.get("https://www.amazon.it")
 
-        # Prova a caricare i cookie salvati
+        # Try to upload saved cookies
         cookies_loaded = False
         if os.path.exists("amazon_cookies.pkl"):
             with open("amazon_cookies.pkl", "rb") as f:
@@ -37,11 +42,11 @@ class autobuy_bot(threading.Thread):
                         pass
                 cookies_loaded = True
 
-        # Ricarica la pagina dopo aver aggiunto i cookie
+        # Refresh the page after adding cookies
         driver.get("https://www.amazon.it/gp/cart/view.html")
         sleep(2)
 
-        # Verifica se il login è riuscito
+        # Verify if login was successful
         try:
             driver.find_element(By.ID, "nav-link-accountList-nav-line-1")
             print(f"[{self.asin}] ✅ Login riuscito con cookie.")
@@ -50,7 +55,7 @@ class autobuy_bot(threading.Thread):
             driver.quit()
             return
 
-        # Vai alla pagina del prodotto
+        # Go to product page
         driver.get(f"https://www.amazon.it/dp/{self.asin}/ref=olp-opf-redir?aod=1&tag=emacon15-21")
         sleep(2)
 
@@ -89,7 +94,7 @@ class autobuy_bot(threading.Thread):
         driver.quit()
 
 
-# --- CONFIGURAZIONE ---
+# --- CONFIGURATION ---
 
 asin_list = [
     "B0DTQCBW9B",   # Bundle Evoluzioni Prismatiche
