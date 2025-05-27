@@ -8,6 +8,8 @@ from dotenv import load_dotenv # type: ignore
 import os
 from selenium.webdriver.chrome.service import Service # type: ignore
 from selenium.webdriver.chrome.options import Options # type: ignore
+import base64
+import io
 
 load_dotenv()
 
@@ -31,16 +33,31 @@ class autobuy_bot(threading.Thread):
         driver.get("https://www.amazon.it")
 
         # Try to upload saved cookies
+        cookie_file_path = "amazon_cookies.pkl"
         cookies_loaded = False
-        if os.path.exists("amazon_cookies.pkl"):
-            with open("amazon_cookies.pkl", "rb") as f:
+
+        if os.path.exists(cookie_file_path):
+            print(f"[{self.asin}] 📦 Caricamento cookie da file locale.")
+            with open(cookie_file_path, "rb") as f:
                 cookies = pickle.load(f)
-                for cookie in cookies:
-                    try:
-                        driver.add_cookie(cookie)
-                    except:
-                        pass
+            cookies_loaded = True
+        elif self.cookie_b64:
+            print(f"[{self.asin}] 🌍 Caricamento cookie da variabile d'ambiente base64.")
+            try:
+                decoded = base64.b64decode(self.cookie_b64)
+                cookies = pickle.load(io.BytesIO(decoded))
                 cookies_loaded = True
+            except Exception as e:
+                print(f"[{self.asin}] ❌ Errore nel decoding dei cookie da ENV: {e}")
+        else:
+            print(f"[{self.asin}] ⚠️ Nessun cookie disponibile.")
+
+        if cookies_loaded:
+            for cookie in cookies:
+                try:
+                    driver.add_cookie(cookie)
+                except:
+                    pass
 
         # Refresh the page after adding cookies
         driver.get("https://www.amazon.it/gp/cart/view.html")
