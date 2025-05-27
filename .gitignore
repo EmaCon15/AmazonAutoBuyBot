@@ -1,3 +1,4 @@
 .env
 amazon_cookies.pkl
 cookies_b64.txt
+amazon_cookies.json

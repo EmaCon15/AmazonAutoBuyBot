@@ -1,11 +1,11 @@
 import threading
-import pickle
 import os
 import asyncio
 import base64
+import json
 import io
 from dotenv import load_dotenv  # type: ignore
-from playwright.async_api import async_playwright # type: ignore
+from playwright.async_api import async_playwright  # type: ignore
 
 load_dotenv()
 
@@ -14,7 +14,7 @@ class AutoBuyBot(threading.Thread):
         super().__init__()
         self.amazon_email = os.getenv("AMAZON_EMAIL")
         self.amazon_psw = os.getenv("AMAZON_PSW")
-        self.cookie_b64 = os.getenv("AMAZON_COOKIES_B64", "")
+        self.cookie_b64 = os.getenv("COOKIE_B64", "")  # the correct variable here
         self.asin = asin
         self.cut_price = cut_price
         self.autocheckout = autocheckout
@@ -28,50 +28,45 @@ class AutoBuyBot(threading.Thread):
             context = await browser.new_context()
             page = await context.new_page()
 
-            # Try to upload saved cookies
-            cookie_file_path = "amazon_cookies.pkl"
             cookies_loaded = False
+            cookies = []
 
-            if os.path.exists(cookie_file_path):
-                print(f"[{self.asin}] 📦 Caricamento cookie da file locale.")
-                with open(cookie_file_path, "rb") as f:
-                    cookies = pickle.load(f)
-                cookies_loaded = True
-            elif self.cookie_b64:
-                print(f"[{self.asin}] 🌍 Caricamento cookie da variabile d'ambiente base64.")
+            # Load cookie from ENV variable (decode from base64 and parse json)
+            if self.cookie_b64:
+                print(f"[{self.asin}] 🌍 Loading cookies from base64 environment variable.")
                 try:
-                    decoded = base64.b64decode(self.cookie_b64)
-                    cookies = pickle.load(io.BytesIO(decoded))
+                    decoded_bytes = base64.b64decode(self.cookie_b64)
+                    decoded_str = decoded_bytes.decode("utf-8")
+                    cookies = json.loads(decoded_str)
                     cookies_loaded = True
                 except Exception as e:
-                    print(f"[{self.asin}] ❌ Errore nel decoding dei cookie da ENV: {e}")
+                    print(f"[{self.asin}] ❌ Error decoding or parsing cookies from ENV: {e}")
             else:
-                print(f"[{self.asin}] ⚠️ Nessun cookie disponibile.")
+                print(f"[{self.asin}] ⚠️ No cookies available in ENV.")
 
+            # If loaded, add context cookies before visiting Amazon
             if cookies_loaded:
-                await page.goto("https://www.amazon.it")
-                await context.add_cookies([{
-                    "name": c["name"],
-                    "value": c["value"],
-                    "domain": c.get("domain", ".amazon.it"),
-                    "path": c.get("path", "/"),
-                    "httpOnly": c.get("httpOnly", False),
-                    "secure": c.get("secure", True),
-                    "sameSite": c.get("sameSite", "Lax"),
-                    "expires": -1
-                } for c in cookies])
+                try:
+                    # Warning: Playwright requires the domain for each cookie
+                    # Make sure cookies contain at least 'name', 'value', 'domain'
+                    await context.add_cookies(cookies)
+                except Exception as e:
+                    print(f"[{self.asin}] ❌ Error adding cookies: {e}")
 
+            # Go to cart to verify login
             await page.goto("https://www.amazon.it/gp/cart/view.html")
             await page.wait_for_timeout(2000)
 
+            # Check login
             try:
                 nav_text = await page.inner_text("#nav-link-accountList-nav-line-1")
-                print(f"[{self.asin}] ✅ Login riuscito con cookie: {nav_text}")
-            except:
-                print(f"[{self.asin}] ❌ Cookie invalidi o scaduti. Esegui `save_cookies.py` per rigenerarli.")
+                print(f"[{self.asin}] ✅ Login successful with cookie: {nav_text}")
+            except Exception:
+                print(f"[{self.asin}] ❌ Invalid or expired cookies. Run `save_cookies.py` to regenerate them.")
                 await browser.close()
                 return
 
+            # Go to the product page
             await page.goto(f"https://www.amazon.it/dp/{self.asin}/ref=olp-opf-redir?aod=1&tag=emacon15-21")
             await page.wait_for_timeout(2000)
 
@@ -82,21 +77,22 @@ class AutoBuyBot(threading.Thread):
                         raw_price = await price_element.inner_text()
                         current_price = int(raw_price.split("<")[0].replace(".", "").replace(",", "").strip())
                     else:
-                        raise Exception("Elemento prezzo non trovato")
-                except:
+                        raise Exception("Price element not found")
+                except Exception:
                     await page.reload()
                     await page.wait_for_timeout(2000)
                     continue
 
                 if current_price > self.cut_price:
-                    print(f"[{self.asin}] 💰 Prezzo attuale troppo alto: {current_price} > {self.cut_price}")
+                    print(f"[{self.asin}] 💰 Current price too high: {current_price} > {self.cut_price}")
                 else:
-                    print(f"[{self.asin}] 🛒 Prezzo OK: {current_price} <= {self.cut_price}")
+                    print(f"[{self.asin}] 🛒 Price OK: {current_price} <= {self.cut_price}")
                     try:
                         add_btn = await page.query_selector('xpath=//*[@id="a-autoid-2-offer-0"]/span/input')
                         if add_btn:
                             await add_btn.click()
                             await page.wait_for_timeout(1000)
+
                             checkout_btn = await page.query_selector('xpath=//*[@id="sc-buy-box-ptc-button"]/span/input')
                             if checkout_btn:
                                 await checkout_btn.click()
@@ -106,11 +102,13 @@ class AutoBuyBot(threading.Thread):
                                 order_btn = await page.query_selector('xpath=//*[@id="submitOrderButtonId"]/span/input')
                                 if order_btn:
                                     await order_btn.click()
-                                    print(f"[{self.asin}] ✅ Ordine completato.")
+                                    print(f"[{self.asin}] ✅ Order completed.")
                             else:
-                                print(f"[{self.asin}] ✅ Articolo nel carrello, attesa checkout manuale.")
+                                print(f"[{self.asin}] ✅ Item in cart, waiting for manual checkout.")
+                        else:
+                            print(f"[{self.asin}] ❌ Add button not found")
                     except Exception as e:
-                        print(f"[{self.asin}] ❌ Errore durante acquisto: {e}")
+                        print(f"[{self.asin}] ❌ Error during purchase: {e}")
                     break
 
                 await page.wait_for_timeout(1000)
