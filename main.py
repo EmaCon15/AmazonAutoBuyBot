@@ -20,7 +20,7 @@ class autobuy_bot(threading.Thread):
 
     def run(self):
         options = webdriver.ChromeOptions()
-        options.headless = False
+        options.headless = True
         driver = webdriver.Chrome(options=options)
 
         driver.get("https://www.amazon.it")
