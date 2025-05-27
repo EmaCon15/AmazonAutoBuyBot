@@ -51,7 +51,7 @@ class autobuy_bot(threading.Thread):
             return
 
         # Vai alla pagina del prodotto
-        driver.get(f"https://www.amazon.it/dp/{self.asin}/ref=olp-opf-redir?aod=1")
+        driver.get(f"https://www.amazon.it/dp/{self.asin}/ref=olp-opf-redir?aod=1&tag=emacon15-21")
         sleep(2)
 
         while True:

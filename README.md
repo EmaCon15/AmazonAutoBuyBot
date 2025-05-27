@@ -1,22 +1,58 @@
 # AmazonAutoBuyBot
 ## Description
-Bot developed in a few days that uses selenium to automate the control and possible purchase of price errors/ discounts recursive on amazon.
-The script supports more than one product at the same time, for each product you can choose a limit price and whether to enable auto-checkout.
-## Getting Started
-  First of all star this repository that I’m sure will be useful to you ;)
-### Dependencies
-  1. Python 3.9.9+ ( I can’t assure you that with lower versions it works, but I think it does)
-### Installing
-  1. Clone this repository with command `git clone https://github.com/davildf/Amazonautobuybot.git`
-  2. Navigate to it
-  3. Run `pip install -r requirements.txt`
-### Running Script
-  1. Open the `main.py` and set your email and password amazon (NOTE: The script is not yet ready to go into 2FA, so make sure that email and password are enough to authenticate), and then the products you want to track. Two examples have already been inserted
+A Python bot that uses Selenium to automatically monitor and optionally purchase discounted products or pricing errors on Amazon.
 
-       ![image](https://github.com/davildf/Amazonautobuybot/assets/80885475/7df03bb9-8264-4a77-aeb4-c03a8a7aae5f)
+This script is an enhanced and updated version of the original code by @davildf, designed to be more reliable and scalable.
+
+It supports multiple products simultaneously. For each product, you can define:
+- A maximum price you're willing to pay.
+- Whether the bot should auto-checkout or stop after adding the product to your cart.
+## Main differences from the original code
+- ✅ Support for multiple ASINs with configurable price thresholds and checkout options.
+- 🔐 Secure login using cookies, allowing persistent sessions even with 2FA enabled.
+- 💾 Introduced save_cookies.py to handle manual login (with 2FA) and save cookies in amazon_cookies.pkl.
+- ⚙️ Environment variable support via .env file (using python-dotenv).
   
-  3. Run `main.py`
+  🔐 *This means your Amazon credentials are no longer hardcoded in the script but safely stored in a separate `.env` file that is not tracked by version control (i.e., Git). This greatly improves security and makes the code safer to share or use across environments.*
+- 💻 Improved logging with ASINs clearly labeled in output.
+- 🧼 Cleaner codebase, better error handling, and easier configuration.
+
+## Getting Started
+### Dependencies
+  1. Python 3.9.9+
+  2. Google Chrome
+  3. [ChromeDriver](https://developer.chrome.com/docs/chromedriver/downloads?hl=it) compatible with your Chrome version
+### Installing
+  ```bash
+  git clone https://github.com/EmaCon15/AmazonAutoBuyBot.git
+  cd AmazonAutoBuyBot
+  pip install -r requirements.txt
+  ```
+### Running Script
+  1. Create a `.env` file in the root directory (same level as main.py) with:
+   
+      ![alt text](image.png)
+  
+  2. Run the login script only once to save cookies:
+  ```bash
+  python3 save_cookies.py
+  ```
+  This opens a Chrome window for login. Complete the login manually (including 2FA if enabled). Cookies will be saved to amazon_cookies.pkl and reused in future runs.
+
+  3. Open main.py and edit these lists:
+  ```python
+  asin_list = [ "B0DTQCBW9B", "B0C8NR3FPG" ]          # ASINs to monitor
+  cut_prices = [ 36, 36 ]                             # Max prices for each ASIN
+  autocheckouts = [ True, False ]                     # Enable auto-checkout per item
+  ```
+### Running the bot
+After configuration:
+```bash
+python3 main.py
+```
+Each product will be monitored in a separate thread. If the price drops below your threshold, the item is added to the cart. If `autocheckout`=True, the bot will attempt to place the order automatically.
+# Disclaimer
+As an Amazon Associate, I earn from qualifying purchases.
+The ASIN URLs used in this script contain my affiliate tag (emacon15-21). If you prefer not to use it, you can simply remove the &tag=emacon15-21 from the product links in main.py.
 # License
 This project is licensed under the MIT License - see the LICENSE.md file for details
-
-In qualità di Affiliato Amazon io ricevo un guadagno dagli acquisti idonei
