@@ -1,10 +1,10 @@
 import threading
 import pickle
 import os
-from selenium import webdriver
-from selenium.webdriver.common.by import By
+from selenium import webdriver # type: ignore
+from selenium.webdriver.common.by import By # type: ignore
 from time import sleep
-from dotenv import load_dotenv
+from dotenv import load_dotenv # type: ignore
 import os
 
 load_dotenv()
