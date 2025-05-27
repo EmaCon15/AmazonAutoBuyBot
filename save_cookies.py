@@ -1,24 +1,27 @@
-from selenium import webdriver
+import asyncio
 import pickle
-import time
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
+from playwright.async_api import async_playwright # type: ignore
 
-# Impostazioni
-options = Options()
-options.headless = False  # Deve essere visibile per il login manuale
-driver = webdriver.Chrome(options=options)
+async def save_cookies():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        context = await browser.new_context()
+        page = await context.new_page()
 
-# Vai alla pagina di login
-driver.get("https://www.amazon.it/gp/sign-in.html")
+        # Vai alla pagina di login
+        await page.goto("https://www.amazon.it/gp/sign-in.html")
 
-# Aspetta che tu faccia login manualmente
-print("➡️ Esegui il login manuale su Amazon (inclusa OTP) e poi premi INVIO qui...")
-input()
+        print("➡️ Esegui il login manuale su Amazon (inclusa OTP) e poi premi INVIO qui...")
+        input()
 
-# Salva i cookie dopo il login
-with open("amazon_cookies.pkl", "wb") as f:
-    pickle.dump(driver.get_cookies(), f)
+        # Ottieni i cookie e salvali
+        cookies = await context.cookies()
+        with open("amazon_cookies.pkl", "wb") as f:
+            pickle.dump(cookies, f)
 
-print("✅ Cookie salvati in amazon_cookies.pkl")
-driver.quit()
+        print("✅ Cookie salvati in amazon_cookies.pkl")
+
+        await browser.close()
+
+if __name__ == "__main__":
+    asyncio.run(save_cookies())
