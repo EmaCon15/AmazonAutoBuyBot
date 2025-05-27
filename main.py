@@ -1,86 +1,118 @@
-import selenium
+import threading
+import pickle
+import os
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from time import sleep
-import threading
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 class autobuy_bot(threading.Thread):
-    def __init__(self,amazon_email,amazon_psw,asin,cut_price,autocheckout):
-        self.amazon_email=amazon_email
-        self.amazon_psw=amazon_psw
-        self.asin=asin
-        self.cut_price=cut_price
-        self.autocheckout=autocheckout
-        threading.Thread.__init__(self) 
+    def __init__(self, asin, cut_price, autocheckout):
+        super().__init__()
+        self.amazon_email = os.getenv("AMAZON_EMAIL")
+        self.amazon_psw = os.getenv("AMAZON_PSW")
+        self.asin = asin
+        self.cut_price = cut_price
+        self.autocheckout = autocheckout
 
     def run(self):
-        options = selenium.webdriver.ChromeOptions() 
+        options = webdriver.ChromeOptions()
         options.headless = False
+        driver = webdriver.Chrome(options=options)
 
-        # Configure the undetected_chromedriver options
-        driver = selenium.webdriver.Chrome(options=options) 
+        driver.get("https://www.amazon.it")
 
-        driver.get("https://www.amazon.it/ap/signin?openid.pape.max_auth_age=0&openid.return_to=https%3A%2F%2Fwww.amazon.it%2Fgp%2Fcart%2Fview.html%2Fref%3Dnav_ya_signin%3F&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.assoc_handle=itflex&openid.mode=checkid_setup&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0")
-        sleep(1)
-        driver.find_element(by=By.XPATH, value='//*[@id="ap_email"]').send_keys(self.amazon_email)
-        sleep(1)
-        driver.find_element(by=By.XPATH, value='//*[@id="continue"]').click()
-        sleep(1)
-        driver.find_element(by=By.XPATH, value='//*[@id="ap_password"]').send_keys(self.amazon_psw)
-        sleep(1)
-        driver.find_element(by=By.XPATH, value='//*[@id="signInSubmit"]').click()
-        sleep(1)
+        # Prova a caricare i cookie salvati
+        cookies_loaded = False
+        if os.path.exists("amazon_cookies.pkl"):
+            with open("amazon_cookies.pkl", "rb") as f:
+                cookies = pickle.load(f)
+                for cookie in cookies:
+                    try:
+                        driver.add_cookie(cookie)
+                    except:
+                        pass
+                cookies_loaded = True
 
+        # Ricarica la pagina dopo aver aggiunto i cookie
+        driver.get("https://www.amazon.it/gp/cart/view.html")
+        sleep(2)
 
-        driver.get("https://www.amazon.it/dp/"+self.asin+"/ref=olp-opf-redir?aod=1&tag=pysol07-21")
-        check=True
-        while check==True:
+        # Verifica se il login è riuscito
+        try:
+            driver.find_element(By.ID, "nav-link-accountList-nav-line-1")
+            print(f"[{self.asin}] ✅ Login riuscito con cookie.")
+        except:
+            print(f"[{self.asin}] ❌ Cookie invalidi o scaduti. Esegui `save_cookies.py` per rigenerarli.")
+            driver.quit()
+            return
+
+        # Vai alla pagina del prodotto
+        driver.get(f"https://www.amazon.it/dp/{self.asin}/ref=olp-opf-redir?aod=1")
+        sleep(2)
+
+        while True:
             try:
-                sleep(2)
-                current_price = int(driver.find_element(by=By.XPATH, value='//*[@id="aod-price-0"]/div/span/span[2]/span[1]').get_attribute("innerHTML").split("<")[0].replace(".",""))
-                
+                price_element = driver.find_element(By.XPATH, '//*[@id="aod-price-0"]/div/span/span[2]/span[1]')
+                current_price = int(price_element.get_attribute("innerHTML").split("<")[0].replace(".", "").replace(",", ""))
             except:
                 driver.refresh()
                 sleep(2)
-                current_price = int(driver.find_element(by=By.XPATH, value='//*[@id="aod-price-0"]/div/span/span[2]/span[1]').get_attribute("innerHTML").split("<")[0].replace(".",""))
+                continue
 
             if current_price > self.cut_price:
-                print("Non c'è l'errore, infatti l'attuale prezzo è di: "+str(current_price))
+                print(f"[{self.asin}] 💰 Prezzo attuale troppo alto: {current_price} > {self.cut_price}")
             else:
-                print("Articolo in errore di prezzo a: "+(current_price))
-                add_cart_btn=driver.find_element(by=By.XPATH, value='//*[@id="a-autoid-2-offer-0"]/span/input')
-                add_cart_btn.click()
-                sleep(0.5)
-                driver.find_element(by=By.XPATH, value='//*[@id="sc-buy-box-ptc-button"]/span/input').click()
-                if self.autocheckout == True:
-                    driver.find_element(by=By.XPATH, value='//*[@id="a-autoid-0-announce"]').click()
-                    driver.find_element(by=By.XPATH, value='//*[@id="submitOrderButtonId"]/span/input"]').click()
-                else:
-                    pass
-                check=False
-            driver.get("https://www.amazon.it/dp/"+self.asin+"/ref=olp-opf-redir?aod=1&tag=pysol07-21")
+                print(f"[{self.asin}] 🛒 Prezzo OK: {current_price} <= {self.cut_price}")
+                try:
+                    add_btn = driver.find_element(By.XPATH, '//*[@id="a-autoid-2-offer-0"]/span/input')
+                    add_btn.click()
+                    sleep(1)
+                    driver.find_element(By.XPATH, '//*[@id="sc-buy-box-ptc-button"]/span/input').click()
+                    sleep(2)
+
+                    if self.autocheckout:
+                        driver.find_element(By.XPATH, '//*[@id="submitOrderButtonId"]/span/input').click()
+                        print(f"[{self.asin}] ✅ Ordine completato.")
+                    else:
+                        print(f"[{self.asin}] ✅ Articolo nel carrello, attesa checkout manuale.")
+                except Exception as e:
+                    print(f"[{self.asin}] ❌ Errore durante acquisto: {e}")
+                break
+
             sleep(1)
-            
+            driver.refresh()
 
         driver.quit()
-    
-        
 
 
-amazon_email="Your amazon email"
-amazon_psw="Your amazon password"
+# --- CONFIGURAZIONE ---
 
-asin = ["B0CX5K5HKC","B07W6GNXZG"]
-cut_price=[360,10]
-autocheckout= [False,False]
+asin_list = [
+    "B0DTQCBW9B",   # Bundle Evoluzioni Prismatiche
+    "B0C8NR3FPG",   # Bundle 151
+    "B0DW4H2J4Z",   # ETB Avventure
+    "B0DX2K9KKZ",   # Super Premium Prismatiche
+]
 
-threads_list=[]
+cut_prices = [36,
+                36,
+                55,
+                100]
 
-for i in range(0, len(asin)):
-    print(asin[i])
-    t=autobuy_bot(amazon_email=amazon_email,amazon_psw=amazon_psw,asin=asin[i],cut_price=cut_price[i],autocheckout=autocheckout[i])
-    t.start() 
-    threads_list.append(t) 
-  
-for t in threads_list: 
+autocheckouts = [True,
+                True,
+                True,
+                True]
+
+threads = []
+for i in range(len(asin_list)):
+    bot = autobuy_bot(asin_list[i], cut_prices[i], autocheckouts[i])
+    bot.start()
+    threads.append(bot)
+
+for t in threads:
     t.join()
-       
